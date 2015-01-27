@@ -1,12 +1,11 @@
 package com.twitter.scalding.bdd
 
-import cascading.tuple.Tuple
 import com.twitter.scalding.RichPipe
-import org.specs.Specification
 import scala.collection.mutable.Buffer
 import scala.util.Try
+import org.scalatest.{ Matchers, WordSpec }
 
-class TrapSupportSpecTest extends Specification with BddDsl {
+class TrapSupportSpecTest extends WordSpec with Matchers with BddDsl {
 
   "A test with single source and traps" should {
     "accept an operation with a single input rich pipe" in {
@@ -26,9 +25,9 @@ class TrapSupportSpecTest extends Specification with BddDsl {
       } Then {
         (output: Buffer[(String, String, String)], exception: Buffer[String]) =>
 
-          output.toList mustEqual List(("col1_1", "col2_1", "col1_1_transf"))
+          output.toList should equal(List(("col1_1", "col2_1", "col1_1_transf")))
 
-          exception.toList mustEqual List("throw")
+          exception.toList should equal(List("throw"))
       }
     }
 
@@ -50,13 +49,13 @@ class TrapSupportSpecTest extends Specification with BddDsl {
         } Then {
           (output: Buffer[(String, String, String)], exception: Buffer[String]) =>
 
-            output.toList mustEqual List(("col1_1", "col2_1", "col1_1_transf"), ("", "", ""))
+            output.toList should equal(List(("col1_1", "col2_1", "col1_1_transf"), ("", "", "")))
 
-            exception.toList mustEqual List("throw")
+            exception.toList should equal(List("throw"))
         }
       }
 
-      testResult.isFailure must beTrue
+      testResult.isFailure should be(true)
     }
   }
 }
