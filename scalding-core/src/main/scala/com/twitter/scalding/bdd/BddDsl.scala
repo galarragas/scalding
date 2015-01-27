@@ -2,7 +2,7 @@ package com.twitter.scalding.bdd
 
 import com.twitter.scalding._
 import scala.collection.mutable.Buffer
-import cascading.tuple.Fields
+import cascading.tuple.{ TupleEntry, Fields }
 import scala.Predef._
 import com.twitter.scalding.Tsv
 import org.slf4j.LoggerFactory
@@ -70,6 +70,12 @@ trait BddDsl extends FieldConversions with PipeOperationsConversions {
     def Then[OutputType](assertion: Buffer[OutputType] => Unit)(implicit conv: TupleConverter[OutputType]): Unit = {
       CompleteTestCase(sources, operation, assertion).run()
     }
+
+    def Then[OutputType, FailedRecordsType](assertion: (Buffer[OutputType], Buffer[FailedRecordsType]) => Unit)(
+      implicit conv: TupleConverter[OutputType], exceptionConv: TupleConverter[FailedRecordsType]): Unit = {
+
+      CompleteTestCaseWithExceptionTrap(sources, operation, assertion).run()
+    }
   }
 
   case class CompleteTestCase[OutputType](sources: List[TestSource], operation: PipeOperation, assertion: Buffer[OutputType] => Unit)(implicit conv: TupleConverter[OutputType]) {
@@ -95,6 +101,47 @@ trait BddDsl extends FieldConversions with PipeOperationsConversions {
 
       // Execute
       jobTest.run.finish
+    }
+  }
+
+  case class CompleteTestCaseWithExceptionTrap[OutputType, FailedRecordsType](
+    sources: List[TestSource], operation: PipeOperation,
+    assertion: (Buffer[OutputType], Buffer[FailedRecordsType]) => Unit)(implicit conv: TupleConverter[OutputType],
+      exceptionConv: TupleConverter[FailedRecordsType]) {
+
+    class DummyJob(args: Args) extends Job(args) {
+      val inputPipes: List[RichPipe] = sources.map(testSource => RichPipe(testSource.asSource.read))
+
+      val outputPipe = RichPipe(operation(inputPipes))
+
+      outputPipe
+        .addTrap(Tsv("exception"))
+        .write(Tsv("output"))
+    }
+
+    def run(): Unit = {
+
+      var output: Buffer[OutputType] = Buffer.empty[OutputType]
+      var trap: Buffer[FailedRecordsType] = Buffer.empty[FailedRecordsType]
+
+      val jobTest = JobTest(new DummyJob(_))
+
+      // Add Sources
+      sources foreach { _.addSourceDataToJobTest(jobTest) }
+
+      // Add success and error trap sinks
+      jobTest
+        .sink[OutputType](Tsv("output")) { buffer: Buffer[OutputType] =>
+          output = buffer
+        }
+        .sink[FailedRecordsType](Tsv("exception")) { buffer: Buffer[FailedRecordsType] =>
+          trap = buffer
+        }
+
+      // Execute
+      jobTest.run.finish
+
+      assertion(output, trap)
     }
   }
 
