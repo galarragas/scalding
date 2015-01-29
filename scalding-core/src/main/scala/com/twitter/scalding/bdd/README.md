@@ -325,5 +325,41 @@ Once the different steps have been tested thoroughly it is possible to combine t
 behavior using the JobTest class provided by Scalding.
 
 
+## Testing Error Conditions - Trap Support for Field API
+
+If you need to test some specific error condition it is possible to instruct the BDD infrastructure to trap exceptions
+and return then to the Then clause. To do this you just need to specify two output pipes in your Then clause, the first
+one will receive the pipe transformation output while the second will receive the content of the trapped exception
+according to the behaviour of the 'addTrap' function of the RichPipe class
+
+
+```scala
+
+    it should "fail for some record content" in {
+        Given {
+            List(
+              ("col1_1", "col2_1"),
+              ("throw", "col2_2")) withSchema (('col1, 'col2))
+        } When {
+            pipe: RichPipe =>
+              {
+                pipe.map('col1 -> 'col1_transf) {
+                  col1: String =>
+                    require(col1 != "throw", "Test exception")
+                    col1 + "_transf"
+                }
+              }
+        } Then {
+            (output: Buffer[(String, String, String)], exception: Buffer[String]) =>
+
+              output.toList should equal(List(("col1_1", "col2_1", "col1_1_transf")))
+
+              exception.toList should equal(List("throw"))
+        }
+    }
+
+```
+
+
 
 
